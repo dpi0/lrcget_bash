@@ -15,16 +15,43 @@ NC="\e[0m"
 FORCE=false
 DEBUG=false
 SYNC_ONLY=false
+LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
 
-for arg in "$@"; do
-  case "$arg" in
-  --force) FORCE=true ;;
-  --debug) DEBUG=true ;;
-  --sync-only) SYNC_ONLY=true ;;
-  *) INPUT_FILE="$arg" ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  --force)
+    FORCE=true
+    shift
+    ;;
+  --debug)
+    DEBUG=true
+    shift
+    ;;
+  --sync-only)
+    SYNC_ONLY=true
+    shift
+    ;;
+  --server)
+    if [[ -n "$2" && "$2" != -* ]]; then
+      LRCLIB_SERVER="${2%/}" # Remove end slash if present
+      shift 2
+    else
+      echo "Error: --server requires a URL value."
+      exit 1
+    fi
+    ;;
+  *)
+    INPUT_FILE="$1"
+    shift
+    ;;
   esac
 done
+
+if [[ ! "$LRCLIB_SERVER" =~ ^https?:// ]]; then
+  echo "Error: Invalid server URL. Must start with http:// or https://"
+  exit 1
+fi
 
 if [[ -z "$INPUT_FILE" || ! -f "$INPUT_FILE" ]]; then
   echo "Usage: $0 <audio_file> [--force] [--debug] [--sync-only]"
@@ -87,7 +114,7 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
   URI_TRACK_ARTIST=$(uri "$TRACK_ARTIST")
   URI_TRACK_ALBUM=$(uri "$TRACK_ALBUM")
 
-  API_GET_URL="https://lrclib.net/api/get?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}&album_name=${URI_TRACK_ALBUM}&duration=${TRACK_SECONDS}"
+  API_GET_URL="${LRCLIB_SERVER}/api/get?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}&album_name=${URI_TRACK_ALBUM}&duration=${TRACK_SECONDS}"
   API_GET_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_GET_URL")
 
   SYNCED_LYRICS=$(echo "$API_GET_RESPONSE" | jq -r '.syncedLyrics // empty')
@@ -104,9 +131,8 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
   elif [[ "$IS_INSTRUMENTAL" == true ]]; then
     STATUS="INS"
     STATUS_COLOR="$DEEP_ORANGE"
-
   elif [[ "$SYNC_ONLY" == true ]]; then
-    API_SEARCH_URL="https://lrclib.net/api/search?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}"
+    API_SEARCH_URL="${LRCLIB_SERVER}/api/search?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}"
     SEARCH_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_SEARCH_URL")
 
     # 1. Select items where syncedLyrics != null
@@ -128,7 +154,6 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
       STATUS="404" # No synced lyrics found even after fuzzy search
       STATUS_COLOR="$DEEP_RED"
     fi
-
   elif [[ "$HTTP_CODE" == "404" || "$TRACK_NAME" == "TrackNotFound" ]]; then
     STATUS="404" # 404 Not Found OR 'name' = 'TrackNotFound'
     STATUS_COLOR="$DEEP_RED"
