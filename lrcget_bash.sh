@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 GREY="\e[38;5;239m"
+LIGHT_GREY="\e[38;5;242m"
 GREEN="\e[38;5;2m"
 RED="\e[38;5;1m"
 DEEP_RED="\e[38;5;88m"
@@ -11,10 +12,20 @@ LIGHT_PINK="\e[38;5;177m"
 YELLOW="\e[38;5;220m"
 NC="\e[0m"
 
-INPUT_FILE="$1"
+FORCE=false
+DEBUG=false
+INPUT_FILE=""
+
+for arg in "$@"; do
+  case "$arg" in
+  --force) FORCE=true ;;
+  --debug) DEBUG=true ;;
+  *) INPUT_FILE="$arg" ;;
+  esac
+done
 
 if [[ -z "$INPUT_FILE" || ! -f "$INPUT_FILE" ]]; then
-  echo "Usage: $0 <audio_file>"
+  echo "Usage: $0 <audio_file> [--force] [--debug]"
   exit 1
 fi
 
@@ -35,8 +46,8 @@ STATUS_COLOR="$NC"
 IS_LYRIC_ALREADY_THERE=false
 
 # Check for embedded lyrics, existing .lrc or .txt files next to $INPUT_FILE and skip if present
-if echo "$METADATA" | grep -qiE "\.tags\.(lyrics|uslt|unsyncedlyrics|sylt|txt)=" ||
-  [[ -f "${BASENAME}.lrc" || -f "${BASENAME}.txt" ]]; then
+if ! $FORCE && (echo "$METADATA" | grep -qiE "\.tags\.(lyrics|uslt|unsyncedlyrics|sylt|txt)=" ||
+  [[ -f "${BASENAME}.lrc" || -f "${BASENAME}.txt" ]]); then
   STATUS="ESC" # Skip
   STATUS_COLOR="$YELLOW"
   IS_LYRIC_ALREADY_THERE=true
@@ -114,3 +125,16 @@ printf "${GREY}[%s]${NC} ${STATUS_COLOR}[%s]${NC} ${GREY}//${NC} ${BLUE}\"%s\"${
   "ALBUM: '${TRACK_ALBUM:-Unknown}'" \
   "ARTIST: '${TRACK_ARTIST:-Unknown}'" \
   "$TRACK_HUMAN_DURATION ($TRACK_SECONDS sec)"
+
+if $DEBUG; then
+  echo -e "${LIGHT_GREY}REQUEST CMD:${NC}${GREY} curl -s -A \"lrcget_bash (https://github.com/dpi0/lrcget_bash)\" --retry 3 --retry-delay 1 --max-time 30 \"$API_GET_URL\"${NC}"
+
+  COMPACT_RESPONSE=$(
+    echo "$RESPONSE" | jq '
+      .plainLyrics = (if .plainLyrics then "<HIDDEN>" else .plainLyrics end)
+      | .syncedLyrics = (if .syncedLyrics then "HIDDEN" else .syncedLyrics end)
+    '
+  )
+
+  echo -e "${LIGHT_GREY}RESPONSE JSON:${NC} ${GREY}$COMPACT_RESPONSE${NC}"
+fi
