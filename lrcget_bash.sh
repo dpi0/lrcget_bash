@@ -14,18 +14,20 @@ NC="\e[0m"
 
 FORCE=false
 DEBUG=false
+SYNC_ONLY=false
 INPUT_FILE=""
 
 for arg in "$@"; do
   case "$arg" in
   --force) FORCE=true ;;
   --debug) DEBUG=true ;;
+  --sync-only) SYNC_ONLY=true ;;
   *) INPUT_FILE="$arg" ;;
   esac
 done
 
 if [[ -z "$INPUT_FILE" || ! -f "$INPUT_FILE" ]]; then
-  echo "Usage: $0 <audio_file> [--force] [--debug]"
+  echo "Usage: $0 <audio_file> [--force] [--debug] [--sync-only]"
   exit 1
 fi
 
@@ -75,6 +77,7 @@ if [[ -n "$TRACK_SECONDS" ]]; then
   TRACK_HUMAN_DURATION="$((TRACK_SECONDS / 60)) min $((TRACK_SECONDS % 60)) sec"
 else
   TRACK_HUMAN_DURATION="N/A"
+  TRACK_SECONDS=0 # Prevent calc errors by defaulting to 0 if not found
 fi
 
 if ! "$IS_LYRIC_ALREADY_THERE"; then
@@ -85,15 +88,14 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
   URI_TRACK_ALBUM=$(uri "$TRACK_ALBUM")
 
   API_GET_URL="https://lrclib.net/api/get?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}&album_name=${URI_TRACK_ALBUM}&duration=${TRACK_SECONDS}"
-  RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_GET_URL")
+  API_GET_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_GET_URL")
 
-  SYNCED_LYRICS=$(echo "$RESPONSE" | jq -r '.syncedLyrics // empty')
-  PLAIN_LYRICS=$(echo "$RESPONSE" | jq -r '.plainLyrics // empty')
-  HTTP_CODE=$(echo "$RESPONSE" | jq -r '.statusCode // 200')
-  TRACK_NAME=$(echo "$RESPONSE" | jq -r '.name // empty')
-  IS_INSTRUMENTAL=$(echo "$RESPONSE" | jq -r '.instrumental // false')
+  SYNCED_LYRICS=$(echo "$API_GET_RESPONSE" | jq -r '.syncedLyrics // empty')
+  PLAIN_LYRICS=$(echo "$API_GET_RESPONSE" | jq -r '.plainLyrics // empty')
+  HTTP_CODE=$(echo "$API_GET_RESPONSE" | jq -r '.statusCode // 200')
+  TRACK_NAME=$(echo "$API_GET_RESPONSE" | jq -r '.name // empty')
+  IS_INSTRUMENTAL=$(echo "$API_GET_RESPONSE" | jq -r '.instrumental // false')
 
-  # Now use the variables instead of re-parsing
   if [[ -n "$SYNCED_LYRICS" ]]; then
     LRC_FILE="${BASENAME}.lrc"
     echo -e "$SYNCED_LYRICS" >"$LRC_FILE"
@@ -102,6 +104,31 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
   elif [[ "$IS_INSTRUMENTAL" == true ]]; then
     STATUS="INS"
     STATUS_COLOR="$DEEP_ORANGE"
+
+  elif [[ "$SYNC_ONLY" == true ]]; then
+    API_SEARCH_URL="https://lrclib.net/api/search?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}"
+    SEARCH_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_SEARCH_URL")
+
+    # 1. Select items where syncedLyrics != null
+    # 2. Sort by difference in duration (squared to get absolute distance, thanks to Gemini)
+    # 3. Pick the top one
+    API_SEARCH_RESPONSE=$(echo "$SEARCH_RESPONSE" | jq --arg d "$TRACK_SECONDS" '
+  [ .[] | select(.syncedLyrics != null) ]
+  | sort_by((.duration - ($d | tonumber? // 0)) | . * .)
+  | .[0] // empty')
+
+    FUZZY_SYNCED_LYRICS=$(echo "$API_SEARCH_RESPONSE" | jq -r '.syncedLyrics // empty')
+
+    if [[ -n "$FUZZY_SYNCED_LYRICS" ]]; then
+      LRC_FILE="${BASENAME}.lrc"
+      echo -e "$FUZZY_SYNCED_LYRICS" >"$LRC_FILE"
+      STATUS="SYN"
+      STATUS_COLOR="$GREEN"
+    else
+      STATUS="404" # No synced lyrics found even after fuzzy search
+      STATUS_COLOR="$DEEP_RED"
+    fi
+
   elif [[ "$HTTP_CODE" == "404" || "$TRACK_NAME" == "TrackNotFound" ]]; then
     STATUS="404" # 404 Not Found OR 'name' = 'TrackNotFound'
     STATUS_COLOR="$DEEP_RED"
@@ -129,12 +156,27 @@ printf "${GREY}[%s]${NC} ${STATUS_COLOR}[%s]${NC} ${GREY}//${NC} ${BLUE}\"%s\"${
 if $DEBUG; then
   echo -e "${LIGHT_GREY}REQUEST CMD:${NC}${GREY} curl -s -A \"lrcget_bash (https://github.com/dpi0/lrcget_bash)\" --retry 3 --retry-delay 1 --max-time 30 \"$API_GET_URL\"${NC}"
 
-  COMPACT_RESPONSE=$(
-    echo "$RESPONSE" | jq '
+  API_GET_COMPACT_RESPONSE=$(
+    echo "$API_GET_RESPONSE" | jq '
       .plainLyrics = (if .plainLyrics then "<HIDDEN>" else .plainLyrics end)
-      | .syncedLyrics = (if .syncedLyrics then "HIDDEN" else .syncedLyrics end)
+      | .syncedLyrics = (if .syncedLyrics then "<HIDDEN>" else .syncedLyrics end)
     '
   )
 
-  echo -e "${LIGHT_GREY}RESPONSE JSON:${NC} ${GREY}$COMPACT_RESPONSE${NC}"
+  echo -e "${LIGHT_GREY}RESPONSE JSON:${NC} ${GREY}$API_GET_COMPACT_RESPONSE${NC}"
+
+  if [[ -n "$API_SEARCH_URL" ]]; then
+    echo -e "${LIGHT_GREY}/API/SEARCH REQUEST CMD:${NC}${GREY} curl -s -A \"lrcget_bash (https://github.com/dpi0/lrcget_bash)\" --retry 3 --retry-delay 1 --max-time 30 \"$API_SEARCH_URL\"${NC}"
+    if [[ -n "$API_SEARCH_RESPONSE" ]]; then
+      API_SEARCH_COMPACT_RESPONSE=$(
+        echo "$API_SEARCH_RESPONSE" | jq '
+        .plainLyrics = (if .plainLyrics then "<HIDDEN>" else .plainLyrics end)
+        | .syncedLyrics = (if .syncedLyrics then "<HIDDEN>" else .syncedLyrics end)
+      '
+      )
+      echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${GREY}$API_SEARCH_COMPACT_RESPONSE${NC}"
+    else
+      echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${DEEP_RED}<no matching result>${NC}"
+    fi
+  fi
 fi
