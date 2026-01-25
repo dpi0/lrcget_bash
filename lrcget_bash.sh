@@ -51,6 +51,10 @@ while [[ $# -gt 0 ]]; do
       exit 1
     fi
     ;;
+  -*)
+    echo "Error: Unknown option $1"
+    exit 1
+    ;;
   *)
     INPUT_FILE="$1"
     shift
