@@ -16,6 +16,7 @@ FORCE=false
 DEBUG=false
 SYNC_ONLY=false
 TEXT_ONLY=false
+NO_INSTRUMENTAL=false
 LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
 
@@ -35,6 +36,10 @@ while [[ $# -gt 0 ]]; do
     ;;
   --text-only)
     TEXT_ONLY=true
+    shift
+    ;;
+  --no-instrumental-lrc)
+    NO_INSTRUMENTAL=true
     shift
     ;;
   --server)
@@ -137,6 +142,9 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
     STATUS="INS"
     STATUS_COLOR="$DEEP_ORANGE"
     MATCH_FOUND=true
+    if ! $NO_INSTRUMENTAL; then
+      echo -e "[00:00.00] ♪ Instrumental ♪" >"${BASENAME}.lrc"
+    fi
   elif [[ -n "$SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
     LRC_FILE="${BASENAME}.lrc"
     echo -e "$SYNCED_LYRICS" >"$LRC_FILE"
@@ -175,6 +183,9 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
     if [[ "$FUZZY_IS_INSTRUMENTAL" == true ]]; then
       STATUS="INS"
       STATUS_COLOR="$DEEP_ORANGE"
+      if ! $NO_INSTRUMENTAL; then
+        echo -e "[00:00.00] ♪ Instrumental ♪" >"${BASENAME}.lrc"
+      fi
     elif [[ -n "$FUZZY_SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
       LRC_FILE="${BASENAME}.lrc"
       echo -e "$FUZZY_SYNCED_LYRICS" >"$LRC_FILE"
