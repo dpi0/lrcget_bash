@@ -2,6 +2,7 @@
 
 GREY="\e[38;5;239m"
 LIGHT_GREY="\e[38;5;242m"
+LIGHTER_GREY="\e[38;5;250m"
 GREEN="\e[38;5;2m"
 RED="\e[38;5;1m"
 DEEP_RED="\e[38;5;88m"
@@ -184,11 +185,11 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
       echo -e "$FUZZY_PLAIN_LYRICS" >"$TXT_FILE"
       STATUS="TXT"
       STATUS_COLOR="$LIGHT_PINK"
-    elif [[ -n "$FUZZY_TRACK_NAME" ]]; then
-      STATUS="EXC" # Goofy aah json
-      STATUS_COLOR="$RED"
+    elif [[ $(echo "$SEARCH_RESPONSE" | jq 'length') -gt 0 ]]; then
+      STATUS="NIL" # Didn't find the requested syncedLyrics or plainLyrics (= null)
+      STATUS_COLOR="$LIGHTER_GREY"
     else
-      STATUS="404"
+      STATUS="404" # Empty json array
       STATUS_COLOR="$DEEP_RED"
     fi
   fi
