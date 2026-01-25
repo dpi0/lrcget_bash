@@ -15,6 +15,7 @@ NC="\e[0m"
 FORCE=false
 DEBUG=false
 SYNC_ONLY=false
+TEXT_ONLY=false
 LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
 
@@ -30,6 +31,10 @@ while [[ $# -gt 0 ]]; do
     ;;
   --sync-only)
     SYNC_ONLY=true
+    shift
+    ;;
+  --text-only)
+    TEXT_ONLY=true
     shift
     ;;
   --server)
@@ -48,13 +53,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if $SYNC_ONLY && $TEXT_ONLY; then
+  echo "Error: --sync-only and --text-only cannot be used together."
+  exit 1
+fi
+
 if [[ ! "$LRCLIB_SERVER" =~ ^https?:// ]]; then
   echo "Error: Invalid server URL. Must start with http:// or https://"
   exit 1
 fi
 
 if [[ -z "$INPUT_FILE" || ! -f "$INPUT_FILE" ]]; then
-  echo "Usage: $0 <audio_file> [--force] [--debug] [--sync-only]"
+  echo "Usage: $0 <audio_file> [--force] [--debug] [--sync-only] [--text-only]"
   exit 1
 fi
 
@@ -123,7 +133,7 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
   TRACK_NAME=$(echo "$API_GET_RESPONSE" | jq -r '.name // empty')
   IS_INSTRUMENTAL=$(echo "$API_GET_RESPONSE" | jq -r '.instrumental // false')
 
-  if [[ -n "$SYNCED_LYRICS" ]]; then
+  if [[ -n "$SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
     LRC_FILE="${BASENAME}.lrc"
     echo -e "$SYNCED_LYRICS" >"$LRC_FILE"
     STATUS="SYN"
