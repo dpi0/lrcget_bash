@@ -4,8 +4,7 @@ GREY="\e[38;5;239m"
 LIGHT_GREY="\e[38;5;242m"
 LIGHTER_GREY="\e[38;5;250m"
 GREEN="\e[38;5;2m"
-RED="\e[38;5;1m"
-DEEP_RED="\e[38;5;88m"
+RED="\e[38;5;88m"
 BLUE="\e[38;5;69m"
 STEEL_BLUE_DARK="\e[38;5;23m"
 DEEP_ORANGE="\e[38;5;208m"
@@ -160,10 +159,11 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
     # Select best match by selecting the one with the smallest duration difference (thanks to Gemini)
     API_SEARCH_RESPONSE=$(echo "$SEARCH_RESPONSE" | jq --arg d "$TRACK_SECONDS" --argjson s "$SYNC_ONLY" --argjson t "$TEXT_ONLY" '
       [ .[] | select(
-          .instrumental == true or
+          ((.duration - ($d | tonumber? // 0)) | if . < 0 then -. else . end) <= 20 and
+          (.instrumental == true or
           (if $s then .syncedLyrics != null
           elif $t then .plainLyrics != null
-          else (.syncedLyrics != null or .plainLyrics != null) end)
+          else (.syncedLyrics != null or .plainLyrics != null) end))
       ) ]
       | sort_by((.duration - ($d | tonumber? // 0)) | . * .)
       | .[0] // empty')
@@ -190,7 +190,7 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
       STATUS_COLOR="$LIGHTER_GREY"
     else
       STATUS="404" # Empty json array
-      STATUS_COLOR="$DEEP_RED"
+      STATUS_COLOR="$RED"
     fi
   fi
 fi
@@ -228,7 +228,7 @@ if $DEBUG && ! "$IS_LYRIC_ALREADY_THERE"; then
       )
       echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${GREY}$API_SEARCH_COMPACT_RESPONSE${NC}"
     else
-      echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${DEEP_RED}<no matching result>${NC}"
+      echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${RED}<no matching result>${NC}"
     fi
   fi
 fi
