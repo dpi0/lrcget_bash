@@ -178,7 +178,7 @@ printf "${GREY}[%s]${NC} ${STATUS_COLOR}[%s]${NC} ${GREY}//${NC} ${BLUE}\"%s\"${
   "ARTIST: '${TRACK_ARTIST:-Unknown}'" \
   "$TRACK_HUMAN_DURATION ($TRACK_SECONDS sec)"
 
-if $DEBUG; then
+if $DEBUG && ! "$IS_LYRIC_ALREADY_THERE"; then
   echo -e "${LIGHT_GREY}REQUEST CMD:${NC}${GREY} curl -s -A \"lrcget_bash (https://github.com/dpi0/lrcget_bash)\" --retry 3 --retry-delay 1 --max-time 30 \"$API_GET_URL\"${NC}"
 
   API_GET_COMPACT_RESPONSE=$(
