@@ -129,52 +129,68 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
 
   SYNCED_LYRICS=$(echo "$API_GET_RESPONSE" | jq -r '.syncedLyrics // empty')
   PLAIN_LYRICS=$(echo "$API_GET_RESPONSE" | jq -r '.plainLyrics // empty')
-  HTTP_CODE=$(echo "$API_GET_RESPONSE" | jq -r '.statusCode // 200')
-  TRACK_NAME=$(echo "$API_GET_RESPONSE" | jq -r '.name // empty')
   IS_INSTRUMENTAL=$(echo "$API_GET_RESPONSE" | jq -r '.instrumental // false')
+  MATCH_FOUND=false
 
-  if [[ -n "$SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
+  # FIRST TRY: /api/get
+  if [[ "$IS_INSTRUMENTAL" == true ]]; then
+    STATUS="INS"
+    STATUS_COLOR="$DEEP_ORANGE"
+    MATCH_FOUND=true
+  elif [[ -n "$SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
     LRC_FILE="${BASENAME}.lrc"
     echo -e "$SYNCED_LYRICS" >"$LRC_FILE"
     STATUS="SYN"
     STATUS_COLOR="$GREEN"
-  elif [[ "$IS_INSTRUMENTAL" == true ]]; then
-    STATUS="INS"
-    STATUS_COLOR="$DEEP_ORANGE"
-  elif [[ "$SYNC_ONLY" == true ]]; then
-    API_SEARCH_URL="${LRCLIB_SERVER}/api/search?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}"
-    SEARCH_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_SEARCH_URL")
-
-    # 1. Select items where syncedLyrics != null
-    # 2. Sort by difference in duration (squared to get absolute distance, thanks to Gemini)
-    # 3. Pick the top one
-    API_SEARCH_RESPONSE=$(echo "$SEARCH_RESPONSE" | jq --arg d "$TRACK_SECONDS" '
-  [ .[] | select(.syncedLyrics != null) ]
-  | sort_by((.duration - ($d | tonumber? // 0)) | . * .)
-  | .[0] // empty')
-
-    FUZZY_SYNCED_LYRICS=$(echo "$API_SEARCH_RESPONSE" | jq -r '.syncedLyrics // empty')
-
-    if [[ -n "$FUZZY_SYNCED_LYRICS" ]]; then
-      LRC_FILE="${BASENAME}.lrc"
-      echo -e "$FUZZY_SYNCED_LYRICS" >"$LRC_FILE"
-      STATUS="SYN"
-      STATUS_COLOR="$GREEN"
-    else
-      STATUS="404" # No synced lyrics found even after fuzzy search
-      STATUS_COLOR="$DEEP_RED"
-    fi
-  elif [[ "$HTTP_CODE" == "404" || "$TRACK_NAME" == "TrackNotFound" ]]; then
-    STATUS="404" # 404 Not Found OR 'name' = 'TrackNotFound'
-    STATUS_COLOR="$DEEP_RED"
-  elif [[ -n "$PLAIN_LYRICS" ]]; then
+    MATCH_FOUND=true
+  elif [[ -n "$PLAIN_LYRICS" && "$SYNC_ONLY" == false ]]; then
     TXT_FILE="${BASENAME}.txt"
     echo -e "$PLAIN_LYRICS" >"$TXT_FILE"
     STATUS="TXT"
     STATUS_COLOR="$LIGHT_PINK"
-  else
-    STATUS="ERR" # Any other HTTP Error
-    STATUS_COLOR="$RED"
+    MATCH_FOUND=true
+  fi
+
+  # FALLBACK TRY: /api/search
+  if [[ "$MATCH_FOUND" == false ]]; then
+    API_SEARCH_URL="${LRCLIB_SERVER}/api/search?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}"
+    SEARCH_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_SEARCH_URL")
+
+    # Select best match by selecting the one with the smallest duration difference (thanks to Gemini)
+    API_SEARCH_RESPONSE=$(echo "$SEARCH_RESPONSE" | jq --arg d "$TRACK_SECONDS" --argjson s "$SYNC_ONLY" --argjson t "$TEXT_ONLY" '
+      [ .[] | select(
+          .instrumental == true or
+          (if $s then .syncedLyrics != null
+          elif $t then .plainLyrics != null
+          else (.syncedLyrics != null or .plainLyrics != null) end)
+      ) ]
+      | sort_by((.duration - ($d | tonumber? // 0)) | . * .)
+      | .[0] // empty')
+
+    FUZZY_SYNCED_LYRICS=$(echo "$API_SEARCH_RESPONSE" | jq -r '.syncedLyrics // empty')
+    FUZZY_PLAIN_LYRICS=$(echo "$API_SEARCH_RESPONSE" | jq -r '.plainLyrics // empty')
+    FUZZY_IS_INSTRUMENTAL=$(echo "$API_SEARCH_RESPONSE" | jq -r '.instrumental // false')
+
+    if [[ "$FUZZY_IS_INSTRUMENTAL" == true ]]; then
+      STATUS="INS"
+      STATUS_COLOR="$DEEP_ORANGE"
+    elif [[ -n "$FUZZY_SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
+      LRC_FILE="${BASENAME}.lrc"
+      echo -e "$FUZZY_SYNCED_LYRICS" >"$LRC_FILE"
+      STATUS="SYN"
+      STATUS_COLOR="$GREEN"
+    elif [[ -n "$FUZZY_PLAIN_LYRICS" && "$SYNC_ONLY" == false ]]; then
+      TXT_FILE="${BASENAME}.txt"
+      echo -e "$FUZZY_PLAIN_LYRICS" >"$TXT_FILE"
+      STATUS="TXT"
+      STATUS_COLOR="$LIGHT_PINK"
+    elif [[ -n "$FUZZY_TRACK_NAME" ]]; then
+      STATUS="EXC" # Goofy aah json
+      STATUS_COLOR="$RED"
+    else
+      STATUS="404"
+      STATUS_COLOR="$DEEP_RED"
+    fi
   fi
 fi
 
@@ -200,7 +216,7 @@ if $DEBUG && ! "$IS_LYRIC_ALREADY_THERE"; then
 
   echo -e "${LIGHT_GREY}RESPONSE JSON:${NC} ${GREY}$API_GET_COMPACT_RESPONSE${NC}"
 
-  if [[ -n "$API_SEARCH_URL" ]]; then
+  if [[ -n "$API_SEARCH_URL" && "$MATCH_FOUND" == false ]]; then
     echo -e "${LIGHT_GREY}/API/SEARCH REQUEST CMD:${NC}${GREY} curl -s -A \"lrcget_bash (https://github.com/dpi0/lrcget_bash)\" --retry 3 --retry-delay 1 --max-time 30 \"$API_SEARCH_URL\"${NC}"
     if [[ -n "$API_SEARCH_RESPONSE" ]]; then
       API_SEARCH_COMPACT_RESPONSE=$(
