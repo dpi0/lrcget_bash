@@ -250,8 +250,10 @@ if $DEBUG && ! "$IS_LYRIC_ALREADY_THERE"; then
       '
       )
       echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${GREY}$API_SEARCH_COMPACT_RESPONSE${NC}"
+    elif [[ $(echo "$SEARCH_RESPONSE" | jq 'length') -eq 0 ]]; then
+      echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${GREY}[] //${NC} ${RED}EMPTY ARRAY${NC}"
     else
-      echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${RED}<no matching result>${NC}"
+      echo -e "${LIGHT_GREY}/API/SEARCH RESPONSE JSON:${NC} ${GREY}{!} //${NC} ${LIGHTER_GREY}NO MATCHING RESULT${NC}"
     fi
   fi
 fi
