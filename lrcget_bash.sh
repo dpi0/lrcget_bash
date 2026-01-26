@@ -179,13 +179,13 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
     # Select best match by selecting the one with the smallest duration difference (thanks to Gemini)
     API_SEARCH_RESPONSE=$(echo "$SEARCH_RESPONSE" | jq --arg d "$TRACK_SECONDS" --argjson s "$SYNC_ONLY" --argjson t "$TEXT_ONLY" '
       [ .[] | select(
-          ((.duration - ($d | tonumber? // 0)) | if . < 0 then -. else . end) <= 20 and
+          (((.duration // 0) - ($d | tonumber? // 0)) | if . < 0 then -. else . end) <= 20 and
           (.instrumental == true or
           (if $s then .syncedLyrics != null
           elif $t then .plainLyrics != null
           else (.syncedLyrics != null or .plainLyrics != null) end))
       ) ]
-      | sort_by((.duration - ($d | tonumber? // 0)) | . * .)
+      | sort_by(((.duration // 0) - ($d | tonumber? // 0)) | . * .)
       | .[0] // empty')
 
     FUZZY_SYNCED_LYRICS=$(echo "$API_SEARCH_RESPONSE" | jq -r '.syncedLyrics // empty')
