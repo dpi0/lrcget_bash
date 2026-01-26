@@ -21,6 +21,13 @@ CACHED_MODE=false
 LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
 
+for tool in ffprobe curl jq; do
+  if ! command -v "$tool" &>/dev/null; then
+    echo -e "${RED}Error: Required tool '$tool' is not installed.${NC}"
+    exit 1
+  fi
+done
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
   --force)
