@@ -4,12 +4,13 @@ GREY="\e[38;5;239m"
 LIGHT_GREY="\e[38;5;242m"
 LIGHTER_GREY="\e[38;5;250m"
 GREEN="\e[38;5;2m"
+DEEP_GREEN="\e[38;5;22m"
 RED="\e[38;5;88m"
 BLUE="\e[38;5;69m"
 STEEL_BLUE_DARK="\e[38;5;23m"
 DEEP_ORANGE="\e[38;5;208m"
 LIGHT_PINK="\e[38;5;177m"
-YELLOW="\e[38;5;220m"
+DEEP_PINK="\e[38;5;96m"
 NC="\e[0m"
 
 FORCE=false
@@ -106,11 +107,25 @@ STATUS_COLOR="$NC"
 IS_LYRIC_ALREADY_THERE=false
 
 # Check for embedded lyrics, existing .lrc or .txt files next to $INPUT_FILE and skip if present
-if ! $FORCE && (echo "$METADATA" | grep -qiE "\.tags\.(lyrics|uslt|unsyncedlyrics|sylt|txt)=" ||
-  [[ -f "${BASENAME}.lrc" || -f "${BASENAME}.txt" ]]); then
-  STATUS="ESC" # Skip
-  STATUS_COLOR="$YELLOW"
-  IS_LYRIC_ALREADY_THERE=true
+if ! $FORCE; then
+  if EMBEDDED_TAG=$(echo "$METADATA" | grep -im1 -E "\.tags\.(lyrics|uslt|unsyncedlyrics|sylt|txt)="); then
+    if echo "$EMBEDDED_TAG" | grep -qE "\[[0-9]{2}:[0-9]{2}"; then
+      STATUS="ESY" # Embedded Synced
+      STATUS_COLOR="$DEEP_GREEN"
+    else
+      STATUS="ETX" # Embedded Text
+      STATUS_COLOR="$DEEP_PINK"
+    fi
+    IS_LYRIC_ALREADY_THERE=true
+  elif [[ -f "${BASENAME}.lrc" ]]; then
+    STATUS="LSY" # Local Synced (.lrc)
+    STATUS_COLOR="$DEEP_GREEN"
+    IS_LYRIC_ALREADY_THERE=true
+  elif [[ -f "${BASENAME}.txt" ]]; then
+    STATUS="LTX" # Local Text (.txt)
+    STATUS_COLOR="$DEEP_PINK"
+    IS_LYRIC_ALREADY_THERE=true
+  fi
 fi
 
 # Extract tags
