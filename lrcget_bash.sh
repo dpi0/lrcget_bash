@@ -17,6 +17,7 @@ DEBUG=false
 SYNC_ONLY=false
 TEXT_ONLY=false
 NO_INSTRUMENTAL=false
+CACHED_MODE=false
 LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
 
@@ -40,6 +41,10 @@ while [[ $# -gt 0 ]]; do
     ;;
   --no-instrumental-lrc)
     NO_INSTRUMENTAL=true
+    shift
+    ;;
+  --cached)
+    CACHED_MODE=true
     shift
     ;;
   --server)
@@ -133,7 +138,10 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
   URI_TRACK_ARTIST=$(uri "$TRACK_ARTIST")
   URI_TRACK_ALBUM=$(uri "$TRACK_ALBUM")
 
-  API_GET_URL="${LRCLIB_SERVER}/api/get?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}&album_name=${URI_TRACK_ALBUM}&duration=${TRACK_SECONDS}"
+  API_ENDPOINT="get"
+  if $CACHED_MODE; then API_ENDPOINT="get-cached"; fi
+
+  API_GET_URL="${LRCLIB_SERVER}/api/${API_ENDPOINT}?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}&album_name=${URI_TRACK_ALBUM}&duration=${TRACK_SECONDS}"
   API_GET_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_GET_URL")
 
   SYNCED_LYRICS=$(echo "$API_GET_RESPONSE" | jq -r '.syncedLyrics // empty')
@@ -141,7 +149,7 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
   IS_INSTRUMENTAL=$(echo "$API_GET_RESPONSE" | jq -r '.instrumental // false')
   MATCH_FOUND=false
 
-  # FIRST TRY: /api/get
+  # FIRST TRY: /api/get (or get-cached)
   if [[ "$IS_INSTRUMENTAL" == true ]]; then
     STATUS="INS"
     STATUS_COLOR="$DEEP_ORANGE"
