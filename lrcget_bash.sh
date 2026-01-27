@@ -283,8 +283,9 @@ manage_lyric() {
     local target_file="${BASENAME}.${type}"
     echo -e "$content" >"$target_file"
     if [[ "$type" == "lrc" ]]; then
-      STATUS="SAVE-FILE-SYNC"
+      [[ "$STATUS" != "SAVE-FILE-INST" ]] && STATUS="SAVE-FILE-SYNC"
       STATUS_COLOR="$GREEN"
+      [[ "$STATUS" == "SAVE-FILE-INST" ]] && STATUS_COLOR="$DEEP_ORANGE"
     else
       STATUS="SAVE-FILE-TEXT"
       STATUS_COLOR="$LIGHT_PINK"
