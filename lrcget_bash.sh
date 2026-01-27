@@ -23,6 +23,7 @@ EMBED=false
 LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
 INPUT_DIR=""
+XARGS_JOBS=8
 ARGS=()
 
 show_help() {
@@ -45,6 +46,7 @@ Options:
   --embed                    Embed lyrics into audio file metadata (use carefully)
   --server <url>             Use a custom LRCLIB server (like "http://localhost:3300")
   --debug                    Enable verbose debug output
+  --jobs <1-15>              Number of parallel jobs when using --dir (default: 8)
   --help                     Show this help message and exit
 
 Supported audio formats:
@@ -125,12 +127,21 @@ while [[ $# -gt 0 ]]; do
       die "--dir requires a directory path."
     fi
     ;;
+  --jobs)
+    if [[ -n "$2" && "$2" =~ ^[0-9]+$ && "$2" -ge 1 && "$2" -le 15 ]]; then
+      XARGS_JOBS="$2"
+      ARGS+=("$1" "$2")
+      shift 2
+    else
+      die "--jobs requires an integer between 1 and 15."
+    fi
+    ;;
   --help | -h)
     show_help
     exit 0
     ;;
   *)
-    die "Unknown or positional argument '$1' is not allowed. Use --song or --dir. + flags"
+    die "Unknown or positional argument '$1' is not allowed. Use --song or --dir."
     ;;
   esac
 done
@@ -143,7 +154,7 @@ if [[ -n "$INPUT_DIR" ]]; then
     -name "*.mp3" -o -name "*.flac" -o -name "*.wav" -o -name "*.m4a" \
     -o -name "*.aac" -o -name "*.ogg" -o -name "*.opus" -o -name "*.wma" \
     \) -print0 |
-    xargs -0 -P 8 -I {} "$0" "${ARGS[@]}" --song "{}"
+    xargs -0 -P "$XARGS_JOBS" -I {} "$0" "${ARGS[@]}" --song "{}"
   exit 0
 fi
 
