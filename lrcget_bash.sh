@@ -19,15 +19,9 @@ SYNC_ONLY=false
 TEXT_ONLY=false
 NO_INSTRUMENTAL=false
 CACHED_MODE=false
+EMBED=false
 LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
-
-for tool in ffprobe curl jq; do
-  if ! command -v "$tool" &>/dev/null; then
-    echo -e "${RED}Error: Required tool '$tool' is not installed.${NC}"
-    exit 1
-  fi
-done
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -55,6 +49,10 @@ while [[ $# -gt 0 ]]; do
     CACHED_MODE=true
     shift
     ;;
+  --embed)
+    EMBED=true
+    shift
+    ;;
   --server)
     if [[ -n "$2" && "$2" != -* ]]; then
       LRCLIB_SERVER="${2%/}" # Remove end slash if present
@@ -75,6 +73,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+REQUIRED_TOOLS="ffprobe curl jq"
+if $EMBED; then
+  REQUIRED_TOOLS="$REQUIRED_TOOLS kid3-cli"
+fi
+
+for tool in $REQUIRED_TOOLS; do
+  if ! command -v "$tool" &>/dev/null; then
+    echo -e "${RED}Error: Required tool '$tool' is not installed.${NC}"
+    exit 1
+  fi
+done
+
 if $SYNC_ONLY && $TEXT_ONLY; then
   echo "Error: --sync-only and --text-only cannot be used together."
   exit 1
@@ -86,7 +96,7 @@ if [[ ! "$LRCLIB_SERVER" =~ ^https?:// ]]; then
 fi
 
 if [[ -z "$INPUT_FILE" || ! -f "$INPUT_FILE" ]]; then
-  echo "Usage: $0 <audio_file> [--force] [--debug] [--sync-only] [--text-only]"
+  echo "Usage: $0 <audio_file> [--force] [--debug] [--sync-only] [--text-only] [--embed]"
   exit 1
 fi
 
@@ -153,6 +163,39 @@ else
   TRACK_SECONDS=0 # Prevent calc errors by defaulting to 0 if not found
 fi
 
+manage_lyric() {
+  local content="$1"
+  local type="$2" # lrc or txt
+
+  if $EMBED; then
+    # Manage special characters in the to be stored lyric metadata, thanks to Gemini
+    local escaped_content="${content//\\/\\\\}"
+    escaped_content="${escaped_content//\"/\\\"}"
+
+    if kid3-cli -c "set Lyrics \"$escaped_content\"" "$INPUT_FILE" &>/dev/null; then
+      STATUS="EMB" # Embed
+      if [[ "$type" == "lrc" ]]; then
+        STATUS_COLOR="$GREEN"
+      else
+        STATUS_COLOR="$LIGHT_PINK"
+      fi
+    else
+      STATUS="ERR"
+      STATUS_COLOR="$RED"
+    fi
+  else
+    local target_file="${BASENAME}.${type}"
+    echo -e "$content" >"$target_file"
+    if [[ "$type" == "lrc" ]]; then
+      STATUS="SYN"
+      STATUS_COLOR="$GREEN"
+    else
+      STATUS="TXT"
+      STATUS_COLOR="$LIGHT_PINK"
+    fi
+  fi
+}
+
 if ! "$IS_LYRIC_ALREADY_THERE"; then
   # Cleanup string
   uri() { jq -rn --arg x "$1" '$x|@uri'; }
@@ -177,19 +220,13 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
     STATUS_COLOR="$DEEP_ORANGE"
     MATCH_FOUND=true
     if ! $NO_INSTRUMENTAL; then
-      echo -e "[00:00.00] ♪ Instrumental ♪" >"${BASENAME}.lrc"
+      manage_lyric "[00:00.00] ♪ Instrumental ♪" "lrc"
     fi
   elif [[ -n "$SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
-    LRC_FILE="${BASENAME}.lrc"
-    echo -e "$SYNCED_LYRICS" >"$LRC_FILE"
-    STATUS="SYN"
-    STATUS_COLOR="$GREEN"
+    manage_lyric "$SYNCED_LYRICS" "lrc"
     MATCH_FOUND=true
   elif [[ -n "$PLAIN_LYRICS" && "$SYNC_ONLY" == false ]]; then
-    TXT_FILE="${BASENAME}.txt"
-    echo -e "$PLAIN_LYRICS" >"$TXT_FILE"
-    STATUS="TXT"
-    STATUS_COLOR="$LIGHT_PINK"
+    manage_lyric "$PLAIN_LYRICS" "txt"
     MATCH_FOUND=true
   fi
 
@@ -218,18 +255,12 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
       STATUS="INS"
       STATUS_COLOR="$DEEP_ORANGE"
       if ! $NO_INSTRUMENTAL; then
-        echo -e "[00:00.00] ♪ Instrumental ♪" >"${BASENAME}.lrc"
+        manage_lyric "[00:00.00] ♪ Instrumental ♪" "lrc"
       fi
     elif [[ -n "$FUZZY_SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
-      LRC_FILE="${BASENAME}.lrc"
-      echo -e "$FUZZY_SYNCED_LYRICS" >"$LRC_FILE"
-      STATUS="SYN"
-      STATUS_COLOR="$GREEN"
+      manage_lyric "$FUZZY_SYNCED_LYRICS" "lrc"
     elif [[ -n "$FUZZY_PLAIN_LYRICS" && "$SYNC_ONLY" == false ]]; then
-      TXT_FILE="${BASENAME}.txt"
-      echo -e "$FUZZY_PLAIN_LYRICS" >"$TXT_FILE"
-      STATUS="TXT"
-      STATUS_COLOR="$LIGHT_PINK"
+      manage_lyric "$FUZZY_PLAIN_LYRICS" "txt"
     elif [[ $(echo "$SEARCH_RESPONSE" | jq 'length') -gt 0 ]]; then
       STATUS="NIL" # Didn't find the requested syncedLyrics or plainLyrics (= null)
       STATUS_COLOR="$LIGHTER_GREY"
