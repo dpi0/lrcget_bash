@@ -22,61 +22,96 @@ CACHED_MODE=false
 EMBED=false
 LRCLIB_SERVER="https://lrclib.net"
 INPUT_FILE=""
+INPUT_DIR=""
+ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
   --force)
     FORCE=true
+    ARGS+=("$1")
     shift
     ;;
   --debug)
     DEBUG=true
+    ARGS+=("$1")
     shift
     ;;
   --sync-only)
     SYNC_ONLY=true
+    ARGS+=("$1")
     shift
     ;;
   --text-only)
     TEXT_ONLY=true
+    ARGS+=("$1")
     shift
     ;;
   --no-instrumental-lrc)
     NO_INSTRUMENTAL=true
+    ARGS+=("$1")
     shift
     ;;
   --cached)
     CACHED_MODE=true
+    ARGS+=("$1")
     shift
     ;;
   --embed)
     EMBED=true
+    ARGS+=("$1")
     shift
     ;;
   --server)
     if [[ -n "$2" && "$2" != -* ]]; then
       LRCLIB_SERVER="${2%/}" # Remove end slash if present
+      ARGS+=("$1" "$2")
       shift 2
     else
       echo "Error: --server requires a URL value."
       exit 1
     fi
     ;;
-  -*)
-    echo "Error: Unknown option $1"
-    exit 1
+  --song)
+    if [[ -n "$2" && "$2" != -* ]]; then
+      INPUT_FILE="$2"
+      shift 2
+    else
+      echo "Error: --song requires a file path."
+      exit 1
+    fi
+    ;;
+  --dir)
+    if [[ -n "$2" && "$2" != -* ]]; then
+      INPUT_DIR="$2"
+      shift 2
+    else
+      echo "Error: --dir requires a directory path."
+      exit 1
+    fi
     ;;
   *)
-    INPUT_FILE="$1"
-    shift
+    echo "Error: Unknown or positional argument '$1' is not allowed. Use --song or --dir."
+    exit 1
     ;;
   esac
 done
 
-REQUIRED_TOOLS="ffprobe curl jq"
-if $EMBED; then
-  REQUIRED_TOOLS="$REQUIRED_TOOLS kid3-cli"
+if [[ -n "$INPUT_DIR" ]]; then
+  if [[ ! -d "$INPUT_DIR" ]]; then
+    echo "Error: '$INPUT_DIR' is not a valid directory."
+    exit 1
+  fi
+  find "$INPUT_DIR" -type f \( \
+    -name "*.mp3" -o -name "*.flac" -o -name "*.wav" -o -name "*.m4a" \
+    -o -name "*.aac" -o -name "*.ogg" -o -name "*.opus" -o -name "*.wma" \
+    \) -print0 |
+    xargs -0 -P 8 -I {} "$0" "${ARGS[@]}" --song "{}"
+  exit 0
 fi
+
+REQUIRED_TOOLS="ffprobe curl jq find xargs"
+if $EMBED; then REQUIRED_TOOLS="$REQUIRED_TOOLS kid3-cli"; fi
 
 for tool in $REQUIRED_TOOLS; do
   if ! command -v "$tool" &>/dev/null; then
@@ -96,7 +131,7 @@ if [[ ! "$LRCLIB_SERVER" =~ ^https?:// ]]; then
 fi
 
 if [[ -z "$INPUT_FILE" || ! -f "$INPUT_FILE" ]]; then
-  echo "Usage: $0 <audio_file> [--force] [--debug] [--sync-only] [--text-only] [--embed]"
+  echo "Usage: $0 --song <file> OR --dir <directory> [flags]"
   exit 1
 fi
 
