@@ -120,19 +120,19 @@ IS_LYRIC_ALREADY_THERE=false
 if ! $FORCE; then
   if EMBEDDED_TAG=$(echo "$METADATA" | grep -im1 -E "\.tags\.(lyrics|uslt|unsyncedlyrics|sylt|txt)="); then
     if echo "$EMBEDDED_TAG" | grep -qE "\[[0-9]{2}:[0-9]{2}"; then
-      STATUS="ESY" # Embedded Synced
+      STATUS="SKIP-EMBD-SYNC" # Skip Embedded Synced
       STATUS_COLOR="$DEEP_GREEN"
     else
-      STATUS="ETX" # Embedded Text
+      STATUS="SKIP-EMBD-TEXT" # Skip Embedded Text
       STATUS_COLOR="$DEEP_PINK"
     fi
     IS_LYRIC_ALREADY_THERE=true
   elif [[ -f "${BASENAME}.lrc" ]]; then
-    STATUS="LSY" # Local Synced (.lrc)
+    STATUS="SKIP-FILE-SYNC" # Skip File (.lrc) Synced
     STATUS_COLOR="$DEEP_GREEN"
     IS_LYRIC_ALREADY_THERE=true
   elif [[ -f "${BASENAME}.txt" ]]; then
-    STATUS="LTX" # Local Text (.txt)
+    STATUS="SKIP-FILE-TEXT" # Skip File (.txt) plain
     STATUS_COLOR="$DEEP_PINK"
     IS_LYRIC_ALREADY_THERE=true
   fi
@@ -173,24 +173,25 @@ manage_lyric() {
     escaped_content="${escaped_content//\"/\\\"}"
 
     if kid3-cli -c "set Lyrics \"$escaped_content\"" "$INPUT_FILE" &>/dev/null; then
-      STATUS="EMB" # Embed
       if [[ "$type" == "lrc" ]]; then
+        STATUS="SAVE-EMBD-SYNC"
         STATUS_COLOR="$GREEN"
       else
+        STATUS="SAVE-EMBD-TEXT"
         STATUS_COLOR="$LIGHT_PINK"
       fi
     else
-      STATUS="ERR"
+      STATUS="FAIL-SAVE-EMBD"
       STATUS_COLOR="$RED"
     fi
   else
     local target_file="${BASENAME}.${type}"
     echo -e "$content" >"$target_file"
     if [[ "$type" == "lrc" ]]; then
-      STATUS="SYN"
+      STATUS="SAVE-FILE-SYNC"
       STATUS_COLOR="$GREEN"
     else
-      STATUS="TXT"
+      STATUS="SAVE-FILE-TEXT"
       STATUS_COLOR="$LIGHT_PINK"
     fi
   fi
@@ -216,11 +217,13 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
 
   # FIRST TRY: /api/get (or get-cached)
   if [[ "$IS_INSTRUMENTAL" == true ]]; then
-    STATUS="INS"
+    STATUS="SAVE-FILE-INST"
     STATUS_COLOR="$DEEP_ORANGE"
     MATCH_FOUND=true
     if ! $NO_INSTRUMENTAL; then
       manage_lyric "[00:00.00] ♪ Instrumental ♪" "lrc"
+      STATUS="SAVE-FILE-INST"
+      STATUS_COLOR="$DEEP_ORANGE"
     fi
   elif [[ -n "$SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
     manage_lyric "$SYNCED_LYRICS" "lrc"
@@ -252,20 +255,22 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
     FUZZY_IS_INSTRUMENTAL=$(echo "$API_SEARCH_RESPONSE" | jq -r '.instrumental // false')
 
     if [[ "$FUZZY_IS_INSTRUMENTAL" == true ]]; then
-      STATUS="INS"
+      STATUS="SAVE-FILE-INST"
       STATUS_COLOR="$DEEP_ORANGE"
       if ! $NO_INSTRUMENTAL; then
         manage_lyric "[00:00.00] ♪ Instrumental ♪" "lrc"
+        STATUS="SAVE-FILE-INST"
+        STATUS_COLOR="$DEEP_ORANGE"
       fi
     elif [[ -n "$FUZZY_SYNCED_LYRICS" && "$TEXT_ONLY" == false ]]; then
       manage_lyric "$FUZZY_SYNCED_LYRICS" "lrc"
     elif [[ -n "$FUZZY_PLAIN_LYRICS" && "$SYNC_ONLY" == false ]]; then
       manage_lyric "$FUZZY_PLAIN_LYRICS" "txt"
     elif [[ $(echo "$SEARCH_RESPONSE" | jq 'length') -gt 0 ]]; then
-      STATUS="NIL" # Didn't find the requested syncedLyrics or plainLyrics (= null)
+      STATUS="FAIL-FIND-LYRC" # Didn't find the requested syncedLyrics or plainLyrics (= null)
       STATUS_COLOR="$LIGHTER_GREY"
     else
-      STATUS="404" # Empty json array
+      STATUS="FAIL-FIND-SONG" # Empty json array
       STATUS_COLOR="$RED"
     fi
   fi
