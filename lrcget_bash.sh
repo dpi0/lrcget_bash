@@ -25,6 +25,44 @@ INPUT_FILE=""
 INPUT_DIR=""
 ARGS=()
 
+show_help() {
+  cat <<'EOF'
+Fetch lyrics using the LRCLIB API.
+
+Usage:
+  lrcget_bash.sh --song <audio_file> [options]
+  lrcget_bash.sh --dir <directory>   [options]
+
+Options:
+  --song <file>              Process a single audio file
+  --dir <directory>          Process all supported audio files in a directory (recursive)
+
+  --force                    Overwrite existing lyrics (use carefully)
+  --sync-only                Only fetch synced/timestamped lyrics
+  --text-only                Only fetch plain/text lyrics
+  --no-instrumental-lrc      Do not generate synced instrumental lyric files
+  --cached                   Use cached API results when available (via /api/get-cached)
+  --embed                    Embed lyrics into audio file metadata (use carefully)
+  --server <url>             Use a custom LRCLIB server (like "http://localhost:3300")
+  --debug                    Enable verbose debug output
+  --help                     Show this help message and exit
+
+Supported audio formats:
+  mp3, flac, wav, m4a, aac, ogg, opus, wma
+
+Examples:
+  lrcget_bash.sh --song track.mp3
+  lrcget_bash.sh --dir Music/ --embed
+  lrcget_bash.sh --song song.flac --sync-only --force
+EOF
+}
+
+die() {
+  echo "Error: $1" >&2
+  echo "Use --help to see usage information." >&2
+  exit 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
   --force)
@@ -68,8 +106,7 @@ while [[ $# -gt 0 ]]; do
       ARGS+=("$1" "$2")
       shift 2
     else
-      echo "Error: --server requires a URL value."
-      exit 1
+      die "--server requires a URL value."
     fi
     ;;
   --song)
@@ -77,8 +114,7 @@ while [[ $# -gt 0 ]]; do
       INPUT_FILE="$2"
       shift 2
     else
-      echo "Error: --song requires a file path."
-      exit 1
+      die "--song requires a file path."
     fi
     ;;
   --dir)
@@ -86,21 +122,22 @@ while [[ $# -gt 0 ]]; do
       INPUT_DIR="$2"
       shift 2
     else
-      echo "Error: --dir requires a directory path."
-      exit 1
+      die "--dir requires a directory path."
     fi
     ;;
+  --help | -h)
+    show_help
+    exit 0
+    ;;
   *)
-    echo "Error: Unknown or positional argument '$1' is not allowed. Use --song or --dir."
-    exit 1
+    die "Unknown or positional argument '$1' is not allowed. Use --song or --dir. + flags"
     ;;
   esac
 done
 
 if [[ -n "$INPUT_DIR" ]]; then
   if [[ ! -d "$INPUT_DIR" ]]; then
-    echo "Error: '$INPUT_DIR' is not a valid directory."
-    exit 1
+    die "'$INPUT_DIR' is not a valid directory."
   fi
   find "$INPUT_DIR" -type f \( \
     -name "*.mp3" -o -name "*.flac" -o -name "*.wav" -o -name "*.m4a" \
@@ -115,32 +152,29 @@ if $EMBED; then REQUIRED_TOOLS="$REQUIRED_TOOLS kid3-cli"; fi
 
 for tool in $REQUIRED_TOOLS; do
   if ! command -v "$tool" &>/dev/null; then
-    echo -e "${RED}Error: Required tool '$tool' is not installed.${NC}"
+    echo -e "${RED}Error: Required tool '$tool' is not installed.${NC}" >&2
+    echo "Run with --help to see usage information." >&2
     exit 1
   fi
 done
 
 if $SYNC_ONLY && $TEXT_ONLY; then
-  echo "Error: --sync-only and --text-only cannot be used together."
-  exit 1
+  die "--sync-only and --text-only cannot be used together."
 fi
 
 if [[ ! "$LRCLIB_SERVER" =~ ^https?:// ]]; then
-  echo "Error: Invalid server URL. Must start with http:// or https://"
-  exit 1
+  die "Invalid server URL. Must start with http:// or https://"
 fi
 
 if [[ -z "$INPUT_FILE" || ! -f "$INPUT_FILE" ]]; then
-  echo "Usage: $0 --song <file> OR --dir <directory> [flags]"
-  exit 1
+  die "$0 --song <file> OR --dir <directory> [flags]"
 fi
 
 # Only allow audio files
 case "${INPUT_FILE##*.}" in
 mp3 | flac | wav | m4a | aac | ogg | opus | wma) ;;
 *)
-  echo "Error: Only audio files allowed (mp3, m4a, aac, ogg, opus and wma)"
-  exit 1
+  die "Only audio files allowed (mp3, m4a, aac, ogg, opus and wma)"
   ;;
 esac
 
