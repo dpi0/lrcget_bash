@@ -2,6 +2,9 @@
 
 Fetch lyrics using the LRCLIB API.
 
+![demo](https://github.com/user-attachments/assets/411dc128-208e-4925-a5d8-db855e3b6bbd)
+
+
 > [!TIP]
 > Make sure to have decently accurate metadata in your tracks before using this script.
 >
