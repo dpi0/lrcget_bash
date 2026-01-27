@@ -3,6 +3,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - Dockerfile
+      - lrcget_bash.sh
+      - .github/workflows/publish.yml
   workflow_dispatch:
 env:
   REGISTRY: ghcr.io
@@ -41,8 +45,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,format=short,prefix=,suffix=${{ matrix.variant.tag_suffix }}
+            type=sha,format=short,suffix=${{ matrix.variant.tag_suffix }}
             type=raw,value=latest${{ matrix.variant.tag_suffix }},enable={{is_default_branch}}
+            type=semver,pattern={{version}},suffix=${{ matrix.variant.tag_suffix }}
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v6
