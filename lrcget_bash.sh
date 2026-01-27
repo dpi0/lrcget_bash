@@ -159,7 +159,14 @@ if [[ -n "$INPUT_DIR" ]]; then
 fi
 
 REQUIRED_TOOLS="ffprobe curl jq find xargs"
-if $EMBED; then REQUIRED_TOOLS="$REQUIRED_TOOLS kid3-cli"; fi
+
+if $EMBED; then
+  REQUIRED_TOOLS="$REQUIRED_TOOLS kid3-cli"
+  if ! command -v kid3-cli >/dev/null; then
+    die "--embed requires kid3-cli to be installed.
+If running via the Docker image, kid3-cli is only included in images tagged with :*-embed."
+  fi
+fi
 
 for tool in $REQUIRED_TOOLS; do
   if ! command -v "$tool" &>/dev/null; then
