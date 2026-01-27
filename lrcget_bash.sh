@@ -118,23 +118,31 @@ IS_LYRIC_ALREADY_THERE=false
 
 # Check for embedded lyrics, existing .lrc or .txt files next to $INPUT_FILE and skip if present
 if ! $FORCE; then
-  if EMBEDDED_TAG=$(echo "$METADATA" | grep -im1 -E "\.tags\.(lyrics|uslt|unsyncedlyrics|sylt|txt)="); then
-    if echo "$EMBEDDED_TAG" | grep -qE "\[[0-9]{2}:[0-9]{2}"; then
-      STATUS="SKIP-EMBD-SYNC" # Skip Embedded Synced
-      STATUS_COLOR="$DEEP_GREEN"
-    else
-      STATUS="SKIP-EMBD-TEXT" # Skip Embedded Text
-      STATUS_COLOR="$DEEP_PINK"
-    fi
-    IS_LYRIC_ALREADY_THERE=true
-  elif [[ -f "${BASENAME}.lrc" ]]; then
-    STATUS="SKIP-FILE-SYNC" # Skip File (.lrc) Synced
+  # Check for file .lrc
+  if [[ -f "${BASENAME}.lrc" ]]; then
+    STATUS="SKIP-FILE-SYNC"
     STATUS_COLOR="$DEEP_GREEN"
     IS_LYRIC_ALREADY_THERE=true
-  elif [[ -f "${BASENAME}.txt" ]]; then
-    STATUS="SKIP-FILE-TEXT" # Skip File (.txt) plain
-    STATUS_COLOR="$DEEP_PINK"
-    IS_LYRIC_ALREADY_THERE=true
+  else
+    EMBEDDED_TAG_LINE=$(echo "$METADATA" | grep -im1 -E "\.tags\.(lyrics|uslt|unsyncedlyrics|sylt|txt)=")
+    EMBEDDED_CONTENT=$(echo "$EMBEDDED_TAG_LINE" | cut -d'=' -f2- | tr -d '"')
+
+    # Check for embedded sync
+    if [[ -n "$EMBEDDED_CONTENT" ]] && echo "$EMBEDDED_CONTENT" | grep -qE "\[[0-9]{2}:[0-9]{2}"; then
+      STATUS="SKIP-EMBD-SYNC"
+      STATUS_COLOR="$DEEP_GREEN"
+      IS_LYRIC_ALREADY_THERE=true
+    # Check for file .txt
+    elif [[ -f "${BASENAME}.txt" ]]; then
+      STATUS="SKIP-FILE-TEXT"
+      STATUS_COLOR="$DEEP_PINK"
+      IS_LYRIC_ALREADY_THERE=true
+    # Check for embedded text
+    elif [[ -n "$EMBEDDED_CONTENT" ]]; then
+      STATUS="SKIP-EMBD-TEXT"
+      STATUS_COLOR="$DEEP_PINK"
+      IS_LYRIC_ALREADY_THERE=true
+    fi
   fi
 fi
 
