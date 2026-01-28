@@ -46,7 +46,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,format=short,suffix=${{ matrix.variant.tag_suffix }}
-            type=raw,value=latest${{ matrix.variant.tag_suffix }},enable={{is_default_branch}}
+            type=raw,value=latest${{ matrix.variant.tag_suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.variant.tag_suffix }}
       - name: Build and push Docker image
         id: push
