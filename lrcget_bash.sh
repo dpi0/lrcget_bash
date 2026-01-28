@@ -247,6 +247,10 @@ TRACK_ARTIST=$(extract_tag "artist")
 TRACK_TITLE=$(extract_tag "title")
 TRACK_SECONDS=$(get_duration_sec)
 
+[[ -z "$TRACK_ARTIST" ]] && TRACK_ARTIST=$(extract_tag "album_artist")
+[[ -z "$TRACK_ARTIST" ]] && TRACK_ARTIST=$(extract_tag "sort_artist")
+[[ -z "$TRACK_ARTIST" ]] && TRACK_ARTIST=$(extract_tag "ARTISTS")
+
 # Use the filename as "TRACK_TITLE" if none found
 API_TRACK_TITLE="${TRACK_TITLE:-$(basename "$INPUT_FILE" | sed 's/\.[^.]*$//')}"
 
