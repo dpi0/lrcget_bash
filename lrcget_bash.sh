@@ -338,6 +338,19 @@ if ! "$IS_LYRIC_ALREADY_THERE"; then
     API_SEARCH_URL="${LRCLIB_SERVER}/api/search?track_name=${URI_TRACK_TITLE}&artist_name=${URI_TRACK_ARTIST}"
     SEARCH_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_SEARCH_URL")
 
+    if [[ $(echo "$SEARCH_RESPONSE" | jq 'length') -eq 0 ]] ||
+      { $SYNC_ONLY && [[ -z $(echo "$SEARCH_RESPONSE" | jq -r '.[].syncedLyrics // empty') ]]; } ||
+      { $TEXT_ONLY && [[ -z $(echo "$SEARCH_RESPONSE" | jq -r '.[].plainLyrics // empty') ]]; }; then
+
+      CLEAN_ARTIST=$(echo "$TRACK_ARTIST" | sed -E 's/\s+(feat\.?|ft\.?|with|vs\.?|&|,).*//i')
+
+      if [[ "$CLEAN_ARTIST" != "$TRACK_ARTIST" ]]; then
+        URI_CLEAN_ARTIST=$(uri "$CLEAN_ARTIST")
+        API_SEARCH_URL="${LRCLIB_SERVER}/api/search?track_name=${URI_TRACK_TITLE}&artist_name=${URI_CLEAN_ARTIST}"
+        SEARCH_RESPONSE=$(curl -s -A "lrcget_bash (https://github.com/dpi0/lrcget_bash)" --retry 3 --retry-delay 1 --max-time 30 "$API_SEARCH_URL")
+      fi
+    fi
+
     # Select best match by selecting the one with the smallest duration difference (thanks to Gemini)
     API_SEARCH_RESPONSE=$(echo "$SEARCH_RESPONSE" | jq --arg d "$TRACK_SECONDS" --argjson s "$SYNC_ONLY" --argjson t "$TEXT_ONLY" '
       [ .[] | select(
