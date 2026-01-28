@@ -3,10 +3,10 @@ on:
   push:
     branches:
       - main
-    paths:
-      - Dockerfile
-      - lrcget_bash.sh
-      - .github/workflows/publish.yml
+    tags:
+      - 'v*'
+    paths-ignore:
+      - '**/*.md'
   workflow_dispatch:
 env:
   REGISTRY: ghcr.io
