@@ -4,11 +4,12 @@ Fetch lyrics using the LRCLIB API.
 
 ![demo](https://github.com/user-attachments/assets/411dc128-208e-4925-a5d8-db855e3b6bbd)
 
-
 > [!TIP]
 > Make sure to have decently accurate metadata in your tracks before using this script.
 >
 > As it relies only on the metadata tags present in the track itself. Like "Title", "Artist", "Album" and "Duration".
+>
+> Use [beets.io](https://beets.readthedocs.io/en/stable/) or [MusicBrainz Picard](https://picard.musicbrainz.org/) for organizing your library and fixing metadata.
 >
 > See more below on how this script works.
 
@@ -39,7 +40,7 @@ To fetch the lyrics for an input track using the `--song` option
 docker run --rm \
   -v "/mnt/Library/Music/Albums:/mnt/Library/Music/Albums" \
   ghcr.io/dpi0/lrcget_bash:latest \
-  --song /mnt/Library/Music/Albums/Handsomeboy\ Technique/\[2005\]\ Adelie\ Land\ \[MP3\]/10\ Your\ Blessings.mp3
+  --song "/mnt/Library/Music/Albums/Handsomeboy Technique/[2005] Adelie Land [MP3]/10 Your Blessings.mp3"
 ```
 
 This will try to fetch the synced lyrics for this track, save it in a `.lrc` file right next to the track and exit.
@@ -50,10 +51,10 @@ To fetch lyrics for the whole directory, use the `--dir` option
 docker run --rm \
   -v "/mnt/Library/Music/Albums:/mnt/Library/Music/Albums" \
   ghcr.io/dpi0/lrcget_bash:latest \
-  --dir /mnt/Library/Music/Albums/Handsomeboy\ Technique/\[2005\]\ Adelie\ Land\ \[MP3\]
+  --dir "/mnt/Library/Music/Albums/Handsomeboy Technique/[2005] Adelie Land [MP3]"
 ```
 
-For all available options see below.
+For all available options see [below](https://github.com/dpi0/lrcget_bash#options).
 
 ## Quickstart - Using Script
 
@@ -74,13 +75,13 @@ Download the script `lrcget_bash.sh` and ideally save it somewhere in your shell
 To fetch lyrics for a track and save it as `.lrc` or `.txt` right next to it
 
 ```bash
-lrcget_bash.sh --song /mnt/Library/Music/Albums/Ninajirachi/\[2025\]\ I\ Love\ My\ Computer\ \[AAC\]/09\ Battery\ Death.m4a
+lrcget_bash.sh --song "/mnt/Library/Music/Albums/Ninajirachi/[2025] I Love My Computer [AAC]/09 Battery Death.m4a"
 ```
 
 For an entire directory
 
 ```bash
-lrcget_bash.sh --dir /mnt/Library/Music/Albums/Ninajirachi/\[2025\]\ I\ Love\ My\ Computer\ \[AAC\]
+lrcget_bash.sh --dir "/mnt/Library/Music/Albums/Ninajirachi/[2025] I Love My Computer [AAC]"
 ```
 
 ## But Why Is This Needed When `tranxuanthang/lrcget` Exists?
@@ -95,7 +96,7 @@ I used [lrcget](https://github.com/tranxuanthang/lrcget) extensively and felt th
 
 This script, although not perfect fits better for my usecase of automation and good enough accuracy.
 
-This script was also inspired by this article I read about 2 months back <https://leshicodes.github.io/blog/spotify-migration/#synced-lyrics-lrcget-kasm>.
+This script was also inspired by this article I read about 2 months back <https://leshicodes.github.io/blog/spotify-migration/#synced-lyrics-lrcget-kasm> and this discussion [tranxuanthang/lrcget/issues/61](https://github.com/tranxuanthang/lrcget/issues/61).
 
 ## How Does This Work?
 
@@ -113,7 +114,7 @@ This script was also inspired by this article I read about 2 months back <https:
     --retry 3 --retry-delay 1 --max-time 30 \
     "https://lrclib.net/api/get?track_name=claws&artist_name=Charli%20XCX&album_name=how%20i%E2%80%99m%20feeling%20now&duration=149"
     ```
-3. It uses the JSON response and fetches either the `plainLyrics` or the `syncedLyrics` field and saves it content in the desired place (embedded or external file).
+3. It uses the JSON response and fetches either the `plainLyrics` or the `syncedLyrics` field and saves its content in the desired place (embedded or external file).
     ```json
     {
       "id": 315361,
@@ -127,7 +128,7 @@ This script was also inspired by this article I read about 2 months back <https:
       "syncedLyrics": "<HIDDEN>"
     }
     ```
-4. If if finds the response is not the one user asked for, it then makes an `/api/search` request.
+4. If it finds the response is not the one user asked for, it then makes an `/api/search` request.
 5. For the response JSON array, it uses the one with the least duration difference with the original track.
 6. And again uses the `plainLyrics` or `syncedLyrics` to embed or store the lyric in an external file.
 
@@ -203,7 +204,7 @@ lrcget_bash.sh --song --embed --sync-only --force /path/to/file.mp3
 
 `--server <url>` - By default the script uses `https://lrclib.net` server address URL for the LRCLIB API.
 
-You can set a custom self-hosted address with this.
+You can set a custom self-hosted address with this option.
 
 ```bash
 lrcget_bash.sh --song --server "http://10.0.0.10:3300" --force /path/to/file.mp3
@@ -221,8 +222,22 @@ lrcget_bash.sh --dir --debug /path/to/directory
 
 `--jobs <1-15>` - Set an integer value for the number of parallel processes to spawn via `xargs`.
 
-Default number is `8`.
+Default value is `8`.
 
 ```bash
 lrcget_bash.sh --song --jobs 5 --text-only --force /path/to/file.mp3
 ```
+
+## What Do All the [STATUS] Mean?
+
+- `[SAVE-FILE-SYNC]`: Saved external `.lrc` file.
+- `[SAVE-FILE-TEXT]`: Saved external `.txt` file.
+- `[SAVE-FILE-INST]`: Saved external `.lrc` file with `[00:00.00] ♪ Instrumental ♪` content.
+- `[SAVE-EMBD-SYNC]`: Saved embedded synced lyrics into the track.
+- `[SAVE-EMBD-TEXT]`: Saved embedded plaintext lyrics into the track.
+- `[SKIP-FILE-SYNC]`: Skipped the track as external `.lrc` file was already present.
+- `[SKIP-FILE-TEXT]`: Skipped the track as external `.txt` file was already present.
+- `[SKIP-EMBD-SYNC]`: Skipped the track as embedded synced lyrics were already present.
+- `[SKIP-EMBD-TEXT]`: Skipped the track as embedded plaintext lyrics already present.
+- `[NONE-FAIL-SONG]`: Couldn't find the track.
+- `[NONE-FAIL-LYRC]`: Couldn't find the desired lyric even though the track is present. Like if user specifically asked for synced lyrics but only plaintext was there.
