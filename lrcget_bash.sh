@@ -235,7 +235,7 @@ fi
 
 # Extract tags
 extract_tag() {
-  echo "$METADATA" | grep -im1 "\.tags\.$1=" | cut -d'=' -f2- | tr -d '"'
+  echo "$METADATA" | grep -im1 "format\.tags\.$1=" | cut -d'=' -f2- | tr -d '"'
 }
 
 get_duration_sec() {
