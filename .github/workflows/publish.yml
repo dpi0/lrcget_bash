@@ -1,61 +1,57 @@
 name: Publish Docker Image to GHCR
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
-    paths-ignore:
-      - '**/*.md'
-  workflow_dispatch:
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
 jobs:
-  build-and-publish:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     strategy:
+      fail-fast: false
       matrix:
-        variant:
-          - name: default
-            with_embed: "false"
-            tag_suffix: ""
-          - name: embed
-            with_embed: "true"
-            tag_suffix: "-embed"
+        flavor: [standard, embed]
+        include:
+          - flavor: standard
+            build_arg: "false"
+          - flavor: embed
+            build_arg: "true"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Log in to GitHub Container Registry
+      - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Extract metadata
+      - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY_IMAGE }}
+          flavor: |
+            latest=false
           tags: |
-            type=sha,format=short,suffix=${{ matrix.variant.tag_suffix }}
-            type=raw,value=latest${{ matrix.variant.tag_suffix }}
-            type=semver,pattern={{version}},suffix=${{ matrix.variant.tag_suffix }}
+            type=raw,value=latest,enable=${{ matrix.flavor == 'standard' }}
+            type=semver,pattern={{version}},enable=${{ matrix.flavor == 'standard' }}
+            type=sha,prefix=sha-,enable=${{ matrix.flavor == 'standard' }}
+
+            type=raw,value=latest-embed,enable=${{ matrix.flavor == 'embed' }}
+            type=semver,pattern={{version}},suffix=-embed,enable=${{ matrix.flavor == 'embed' }}
+            type=sha,prefix=sha-,suffix=-embed,enable=${{ matrix.flavor == 'embed' }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Build and push Docker image
-        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            WITH_EMBED=${{ matrix.variant.with_embed }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            WITH_EMBED=${{ matrix.build_arg }}
